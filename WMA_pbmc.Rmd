@@ -1,0 +1,629 @@
+---
+title: "WMA_pbmc"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Analyzing each dataset 
+```{r}
+library(DT)
+library(UpSetR)
+
+path_with_WMA <- '/Users/korshe/Documents/Data_Groningen/pbmc_5ds/'
+dataset_ids <- c('stemi_v2','stemi_v3','v2_1m','v3_1m', 'ng')
+
+tab_eqtls <- read.table(paste(path_with_WMA,'Sample.size._tab.tsv',sep=''), sep='\t', header=T)
+tab <- tab_eqtls
+for (dataset_id in dataset_ids){
+#tab<- tab %>% group_by(bulk.feature_id) %>%   arrange(cFDR_empirical_feature_p_value)
+tab <- tab[order(tab[,paste0('p_value_', dataset_id )], decreasing = F),]
+tab_bh = multtest::mt.rawp2adjp(c("BH","Bonferroni"),rawp = tab[,paste0('p_value_', dataset_id )])$adjp
+tab[,paste0('BH_', dataset_id )] <- tab_bh[,2]
+tab[,paste0('Bonf_', dataset_id )] <- tab_bh[,3]
+}
+
+
+UpSetR::upset(fromList(list(NG= tab[tab$BH_ng <0.05, ]$snp_gene, 
+                            STEMI_v2 = tab[tab$BH_stemi_v2 <0.05, ]$snp_gene,
+                            STEMI_v3 = tab[tab$BH_stemi_v3 <0.05, ]$snp_gene,
+                            V2_1M = tab[tab$BH_v2_1m <0.05, ]$snp_gene,
+                            V3_1M = tab[tab$BH_v3_1m <0.05, ]$snp_gene
+                            # ,
+                            # WMA_SS = tab[tab$BH_ZW_ss <0.05, ]$snp_gene,
+                            # WMA_SE = tab[tab$BH_ZW_SE <0.05, ]$snp_gene
+                            )), 
+              set_size.show = T, order.by = 'freq', nintersects = 60,nsets = 20,sets.x.label = 'BH eQTLs')
+
+UpSetR::upset(fromList(list(NG= tab[tab$BH_ng <0.05, ]$feature_id, 
+                            STEMI_v2 = tab[tab$BH_stemi_v2 <0.05, ]$feature_id,
+                            STEMI_v3 = tab[tab$BH_stemi_v3 <0.05, ]$feature_id,
+                            V2_1M = tab[tab$BH_v2_1m <0.05, ]$feature_id,
+                            V3_1M = tab[tab$BH_v3_1m <0.05, ]$feature_id
+                            # ,
+                            # WMA_SS = tab[tab$BH_ZW_ss <0.05, ]$feature_id,
+                            # WMA_SE = tab[tab$BH_ZW_SE <0.05, ]$feature_id
+                            )), 
+              set_size.show = T, order.by = 'freq', nintersects = 60,nsets = 20,sets.x.label = 'BH eGenes')
+
+UpSetR::upset(fromList(list(NG= tab[tab$Bonf_ng <0.05, ]$snp_gene, 
+                            STEMI_v2 = tab[tab$Bonf_stemi_v2 <0.05, ]$snp_gene,
+                            STEMI_v3 = tab[tab$Bonf_stemi_v3 <0.05, ]$snp_gene,
+                            V2_1M = tab[tab$Bonf_v2_1m <0.05, ]$snp_gene,
+                            V3_1M = tab[tab$Bonf_v3_1m <0.05, ]$snp_gene
+                            # ,
+                            # WMA_SS = tab[tab$Bonf_ZW_ss <0.05, ]$snp_gene,
+                            # WMA_SE = tab[tab$Bonf_ZW_SE <0.05, ]$snp_gene
+                            )), 
+              set_size.show = T, order.by = 'freq', nintersects = 60,nsets = 20,sets.x.label = 'Bonf eQTLs')
+
+UpSetR::upset(fromList(list(NG= tab[tab$Bonf_ng <0.05, ]$feature_id, 
+                            STEMI_v2 = tab[tab$Bonf_stemi_v2 <0.05, ]$feature_id,
+                            STEMI_v3 = tab[tab$Bonf_stemi_v3 <0.05, ]$feature_id,
+                            V2_1M = tab[tab$Bonf_v2_1m <0.05, ]$feature_id,
+                            V3_1M = tab[tab$Bonf_v3_1m <0.05, ]$feature_id
+                            # ,
+                            # WMA_SS = tab[tab$Bonf_ZW_ss <0.05, ]$feature_id,
+                            # WMA_SE = tab[tab$Bonf_ZW_SE <0.05, ]$feature_id
+                            )), 
+              set_size.show = T, order.by = 'freq', nintersects = 60,nsets = 20,sets.x.label = 'Bonf eGenes')
+
+
+```
+## Expression parameters 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(gridExtra)
+param = 'mean_log.donor'
+summary_stat_filteres <- tab
+get_plot_for_values <- function(summary_stat_filteres,param){
+  #summary_stat_filteres <- summary_stat_filteres[1:500,]
+  param_cols <- colnames(summary_stat_filteres)[grep(param, colnames(summary_stat_filteres))]
+  summary_stat_filteres_par <- summary_stat_filteres %>%  select(one_of(param_cols), snp_gene)
+  
+  summary_stat_filteres_par <- summary_stat_filteres_par[sample(nrow(summary_stat_filteres_par), 1500), ] #sample(summary_stat_filteres_par, 1000)
+  colnames(summary_stat_filteres_par) <-  gsub(param, "", colnames(summary_stat_filteres_par))
+  colnames(summary_stat_filteres_par) <-  gsub("_", "", colnames(summary_stat_filteres_par))
+  
+  colnames(summary_stat_filteres_par)[ colnames(summary_stat_filteres_par) == 'stemiv2'] <- 'van_Blokland_v2'
+  colnames(summary_stat_filteres_par)[ colnames(summary_stat_filteres_par) == 'stemiv3'] <- 'van_Blokland_v3'
+  colnames(summary_stat_filteres_par)[ colnames(summary_stat_filteres_par) == 'ng'] <- 'van_der_Wijst_v2'
+  colnames(summary_stat_filteres_par)[ colnames(summary_stat_filteres_par) == 'v21m'] <- 'Oelen_v2'
+  colnames(summary_stat_filteres_par)[ colnames(summary_stat_filteres_par) == 'v31m'] <- 'Oelen_v3'
+  
+  summary_stat_filteres_par <- summary_stat_filteres_par[order(as.numeric(summary_stat_filteres_par$van_der_Wijst_v2)), ]
+  summary_stat_filteres_par$gene <- 1:length(summary_stat_filteres_par$snpgene)
+  data_long <- gather(summary_stat_filteres_par, condition, measurement, 1:5, factor_key=TRUE)
+  data_long$measurement <- as.numeric(data_long$measurement)
+  print(param)
+  #data_long <- data_long[order(data_long$measurement),]
+  plot1<- 
+    ggplot(data = data_long, aes(x = gene, y = measurement, color = condition)) +  geom_line()  +theme_light()  + 
+    scale_x_continuous(name="Gene id")
+  
+  
+  plot2<-ggplot(data = data_long,
+                mapping = aes(x = gene, y = measurement, color = condition)) +theme_light() +
+    geom_line() +
+    facet_grid(rows = vars(condition)) + ggtitle(param) 
+
+
+  plot3 <- ggplot(data_long, aes(x = measurement, color = condition)) + theme_light() + geom_density(alpha=.3) + 
+  scale_x_continuous(name=param, limits=c(0, 6))
+  # grid.arrange(plot1,plot2, plot3, ncol = 3)
+  # grid.arrange(plot1, plot3, ncol = 2)
+  grid.arrange(plot3, plot2, ncol = 2)
+  
+  #grid.arrange(plot1p,plot2p)
+}
+
+```
+
+```{r, fig.height=2.5}
+get_plot_for_values(summary_stat_filteres,param='mean.donor')
+```
+```{r, fig.height=2.5}
+get_plot_for_values(summary_stat_filteres,param='mean.cell')
+```
+```{r, fig.height=2.5}
+get_plot_for_values(summary_stat_filteres,param='sd.donor')
+```
+```{r, fig.height=2.5}
+get_plot_for_values(summary_stat_filteres,param='sd.cell')
+
+```
+```{r, fig.height=2.5}
+get_plot_for_values(summary_stat_filteres,param='sd_prop')
+```
+
+
+# WMA efficiency estimate 5ds
+```{r}
+weights <- read.table(paste(path_with_WMA,'list_of_weighting_ids.tsv',sep=''), sep='\t', header=T)
+weights$x
+```
+
+```{r}
+dataset_characteristics <- read.table(paste(path_with_WMA,'PBMC_dataset_specifications.csv',sep=''), sep=',', header=T)
+datatable(dataset_characteristics,extensions = "Buttons", 
+            options = list(paging = TRUE,
+                           scrollX=TRUE, 
+                           searching = TRUE,
+                           ordering = TRUE,
+                           dom = 'Bfrtip',
+                           buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+# Weights and weighting characteristics 
+
+Check what  it the most optimal weighting using n eQTLs BH-corrected 
+
+```{r}
+library(DT)
+path_with_WMA <- '/Users/korshe/Documents/Data_Groningen/pbmc_5ds/'
+
+BH <- read.table(paste(path_with_WMA,'BH','.tsv',sep=''), sep='\t', header=T)
+BH <- BH[order(BH$eQTLs),]
+BH <- BH[,c(10,11,1:9)]
+DT::datatable(BH,extensions = "Buttons", 
+            options = list(paging = TRUE,
+                           scrollX=TRUE, 
+                           searching = TRUE,
+                           ordering = TRUE,
+                           dom = 'Bfrtip',
+                           buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+Check what  it the most optimal weighting using n eQTLs Bonferroni-corrected 
+
+```{r}
+Bonf <- read.table(paste(path_with_WMA,'Bonf','.tsv',sep=''), sep='\t', header=T)
+Bonf <- Bonf[order(Bonf$eQTLs),]
+Bonf <- Bonf[,c(10,11,1:9)]
+DT::datatable(Bonf,extensions = "Buttons", 
+            options = list(paging = TRUE,
+                           scrollX=TRUE, 
+                           searching = TRUE,
+                           ordering = TRUE,
+                           dom = 'Bfrtip',
+                           buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+```{r}
+library(viridis)
+tab <- tab[complete.cases(tab),]
+get_density <- function(x, y, ...) {
+  dens <- MASS::kde2d(x, y, ...)
+  ix <- findInterval(x, dens$x)
+  iy <- findInterval(y, dens$y)
+  ii <- cbind(ix, iy)
+  return(dens$z[ii])
+}
+
+tab$density <- get_density(tab$ZW_weight_ss, tab$OverallZScore.eqtlgen_ng, n = 105)
+
+ggplot(tab) + geom_point(aes(tab$ZW_weight_ss, tab$OverallZScore.eqtlgen_ng, color = density))  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),panel.background = element_blank(),axis.line = element_line(colour = "grey")) +  labs(y = "ZScore from eQTLGen", x = "Weighted ZScore (SS)")  +  scale_color_viridis()
+
+ggplot(tab) + geom_point(aes(tab$ZW_weight_SE, tab$OverallZScore.eqtlgen_ng, color = density))  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),panel.background = element_blank(),axis.line = element_line(colour = "grey")) +  labs(y = "ZScore from eQTLGen", x = "Weighted ZScore (SE)")  +  scale_color_viridis()
+```
+
+# WMA estimate for pairwise weighting
+
+```{r}
+path_wma_pairwise <- '/Users/korshe/Documents/Data_Groningen/pbmc_pairwise_2022/ALL/'
+datset_combination = 'ng_vs_stemi_v2'
+
+tab_prep <- function(path_wma_pairwise, datset_combination){
+ng_stemi_v2 <- read.table(paste(path_wma_pairwise,'ALL_',datset_combination,'.tsv',sep=''), sep='\t', header=T)
+ng_stemi_v2= ng_stemi_v2[order(ng_stemi_v2$Bonf_genes,ng_stemi_v2$Bonf_TP,decreasing = c(T,T)),]
+ng_stemi_v2["rank_genes"] = c(1:nrow(ng_stemi_v2))
+ng_stemi_v2$weight <- paste(ng_stemi_v2$ss, gsub('[0-9]+', '', rownames(ng_stemi_v2) ), sep='_')
+return(ng_stemi_v2)
+}
+```
+## Between chemistries 
+
+```{r}
+ng_vs_stemi_v2 <- tab_prep(path_wma_pairwise, datset_combination)
+
+datatable(ng_vs_stemi_v2[,c(1:2,4,6, 10,11)],extensions = "Buttons", 
+            options = list(buttons = c('copy', 'csv', 'excel', 'pdf') ))
+
+```
+
+```{r}
+ng_vs_v2_1m <- tab_prep(path_wma_pairwise, datset_combination='ng_vs_v2_1m')
+
+datatable(ng_vs_v2_1m[,c(1:2,4,6, 10,11)],extensions = "Buttons", 
+            options = list(buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+```{r}
+stemi_v3_vs_v3_1m <- tab_prep(path_wma_pairwise, datset_combination='stemi_v3_vs_v3_1m')
+
+datatable(stemi_v3_vs_v3_1m[,c(1:2,4,6, 10,11)],extensions = "Buttons", 
+            options = list(buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+```{r}
+#library(matrixStats)
+inter_chemistries_agr_rank <- merge(ng_vs_stemi_v2[,c('weight','rank_genes') ],ng_vs_v2_1m[,c('weight','rank_genes')],by= 'weight')
+inter_chemistries_agr_rank <- merge(inter_chemistries_agr_rank,stemi_v3_vs_v3_1m[,c('weight','rank_genes')],by= 'weight')
+inter_chemistries_agr_rank$weight <- gsub('.tsv', '', inter_chemistries_agr_rank$weight )
+rownames(inter_chemistries_agr_rank) <- inter_chemistries_agr_rank$weight
+inter_chemistries_agr_rank$weight <- NULL
+inter_chemistries_agr_rank$agregated_rank <- rowSums(inter_chemistries_agr_rank)
+inter_chemistries_agr_rank <- inter_chemistries_agr_rank[order(inter_chemistries_agr_rank$agregated_rank),]
+
+datatable(inter_chemistries_agr_rank,extensions = "Buttons", 
+            options = list(paging = TRUE,
+                           scrollX=TRUE, 
+                           searching = TRUE,
+                           ordering = TRUE,
+                           dom = 'Bfrtip',
+                           buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+## Between chemistries 
+
+```{r}
+stemi_v3_vs_stemi_v2 <- tab_prep(path_wma_pairwise, datset_combination='stemi_v3_vs_stemi_v2')
+
+datatable(stemi_v3_vs_stemi_v2[,c(1:2,4,6, 10,11)],extensions = "Buttons", 
+            options = list(buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+```{r}
+ng_vs_v3_1m <- tab_prep(path_wma_pairwise, datset_combination='ng_vs_v3_1m')
+
+datatable(ng_vs_v3_1m[,c(1:2,4,6, 10,11)],extensions = "Buttons", 
+            options = list(buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+```{r}
+v3_1m_vs_v2_1m <- tab_prep(path_wma_pairwise, datset_combination='v3_1m_vs_v2_1m')
+
+datatable(v3_1m_vs_v2_1m[,c(1:2,4,6, 10,11)],extensions = "Buttons", 
+            options = list(buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+### Getting aggregated rank 
+
+```{r}
+#library(matrixStats)
+between_chemistries_agr_rank <- merge(v3_1m_vs_v2_1m[,c('weight','rank_genes') ],ng_vs_v3_1m[,c('weight','rank_genes')],by= 'weight')
+between_chemistries_agr_rank <- merge(between_chemistries_agr_rank,stemi_v3_vs_stemi_v2[,c('weight','rank_genes')],by= 'weight')
+between_chemistries_agr_rank$weight <- gsub('.tsv', '', between_chemistries_agr_rank$weight )
+rownames(between_chemistries_agr_rank) <- between_chemistries_agr_rank$weight
+between_chemistries_agr_rank$weight <- NULL
+between_chemistries_agr_rank$agregated_rank <- rowSums(between_chemistries_agr_rank)
+between_chemistries_agr_rank <- between_chemistries_agr_rank[order(between_chemistries_agr_rank$agregated_rank),]
+
+datatable(between_chemistries_agr_rank,extensions = "Buttons", 
+            options = list(paging = TRUE,
+                           scrollX=TRUE, 
+                           searching = TRUE,
+                           ordering = TRUE,
+                           dom = 'Bfrtip',
+                           buttons = c('copy', 'csv', 'excel', 'pdf') ))
+```
+
+# Grid search
+## functions
+```{r}
+dataset_combination <- 'ng_vs_stemi_v2'
+grid_path <- '/Users/korshe/Documents/Data_Groningen/pbmc_pairwise_2022/grid_search/'
+
+heatmap_fun <- function(grid_path,dataset_combination){
+grid_tab <- read.table(paste(grid_path,'Grid_summary_',dataset_combination,'.tsv',sep=''), sep='\t', header=T)
+dim(grid_tab)
+grid_tab$param <- NULL
+grid_tab <- grid_tab[order(grid_tab$grid),]
+grid_tab <- grid_tab[!duplicated(grid_tab$grid),]
+rownames(grid_tab) <- paste(grid_tab$grid)
+grid_tab$grid <- NULL
+nba_heatmap <- heatmap(t(as.matrix(grid_tab)),Colv = NA, Rowv = NA, scale="column", main = paste(dataset_combination, 'Grid search'))
+}
+
+```
+
+```{r}
+ library(knitr)
+
+show_most_optimal_weight <- function(grid_path,dataset_combination){
+grid_tab <- read.table(paste(grid_path,'Grid_summary_',dataset_combination,'.tsv',sep=''), sep='\t', header=T)
+grid_tab$param <- NULL
+grid_tab <- grid_tab[order(grid_tab$SS, decreasing = T),]
+SS_grid <- grid_tab[1:5, c('grid','SS')]
+#grid_tab <- grid_tab[grid_tab$grid < 15,]
+grid_tab_long <- gather(grid_tab, weight, neQTLs, 1:38, factor_key=TRUE)
+grid_tab_long <- grid_tab_long[order(grid_tab_long$neQTLs, decreasing = T),]
+head(grid_tab_long)
+max(grid_tab)
+# knitr::kable(SS_grid,  caption = paste(dataset_combination, 'SS-based WMA'))
+# knitr::kable(grid_tab_long[1:20,],  caption = paste(dataset_combination, 'Top grid with other params'))
+ t1 <- head(SS_grid)
+ t2 <- head(grid_tab_long[1:20,])
+ print(kable(t1),caption = paste(dataset_combination, 'SS-based WMA'))
+ print(kable(t2), caption = paste(dataset_combination, 'Top grid with other parameters'))
+}
+
+#show_most_optimal_weight(grid_path, dataset_combination)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+line_fun <- function(grid_path,dataset_combination){
+grid_tab <- read.table(paste(grid_path,'Grid_summary_',dataset_combination,'.tsv',sep=''), sep='\t', header=T)
+dim(grid_tab)
+grid_tab$param <- NULL
+grid_tab <- grid_tab[order(grid_tab$grid),]
+grid_tab <- grid_tab[!duplicated(grid_tab$grid),]
+rownames(grid_tab) <- paste(grid_tab$grid)
+# removing columns which have avr score less than SS 
+
+grid_tab_means <- as.data.frame(colMeans(grid_tab))
+colnames(grid_tab_means) <- 'mean'
+grid_tab_means$weight <- rownames(grid_tab_means)
+grid_tab_means_less_SS<- grid_tab_means[grid_tab_means$mean > grid_tab_means[1,1],'weight']
+grid_tab_means <- grid_tab_means[order(grid_tab_means$mean, decreasing = T),]
+grid_tab <- grid_tab[grid_tab$grid < 10,]
+grid_tab_subset_top_5 <- grid_tab[,colnames(grid_tab) %in% c(grid_tab_means$weight[1:5],'SS', 'grid')]
+dim(grid_tab_subset_top_5)
+
+grid_tab_long <- gather(grid_tab_subset_top_5, weight, neQTLs, 1:6, factor_key=TRUE)
+
+grid_tab_long %>%  ggplot(aes(x=grid, y=neQTLs, group=weight, color=weight)) + geom_line() + theme_light() + ggtitle(paste(dataset_combination, "top 5 weights and Sample size"))
+}
+
+```
+## results
+
+
+```{r, fig.height=4}
+dataset_combination = 'ng_vs_stemi_v2'
+heatmap_fun(grid_path,dataset_combination)
+show_most_optimal_weight(grid_path,dataset_combination)
+```
+
+```{r, fig.height=3}
+line_fun(grid_path,dataset_combination)
+```
+
+
+```{r, fig.height=4}
+dataset_combination = 'ng_vs_stemi_v3'
+heatmap_fun(grid_path,dataset_combination)
+show_most_optimal_weight(grid_path,dataset_combination)
+```
+
+```{r, fig.height=3}
+line_fun(grid_path,dataset_combination)
+```
+
+
+```{r, fig.height=4}
+dataset_combination = 'ng_vs_v2_1m'
+heatmap_fun(grid_path,dataset_combination)
+show_most_optimal_weight(grid_path,dataset_combination)
+```
+
+```{r, fig.height=3}
+line_fun(grid_path,dataset_combination)
+```
+
+
+```{r, fig.height=4}
+dataset_combination = 'ng_vs_v3_1m'
+heatmap_fun(grid_path,dataset_combination)
+show_most_optimal_weight(grid_path,dataset_combination)
+```
+
+```{r, fig.height=3}
+line_fun(grid_path,dataset_combination)
+```
+
+```{r, fig.height=4}
+dataset_combination = 'v3_1m_vs_stemi_v2'
+heatmap_fun(grid_path,dataset_combination)
+show_most_optimal_weight(grid_path,dataset_combination)
+```
+
+```{r, fig.height=3}
+#line_fun(grid_path,dataset_combination)
+```
+
+```{r, fig.height=4}
+dataset_combination = 'v3_1m_vs_stemi_v3'
+heatmap_fun(grid_path,dataset_combination)
+show_most_optimal_weight(grid_path,dataset_combination)
+```
+
+```{r, fig.height=3}
+line_fun(grid_path,dataset_combination)
+```
+
+```{r, fig.height=4}
+dataset_combination = 'v3_1m_vs_v2_1m'
+heatmap_fun(grid_path,dataset_combination)
+show_most_optimal_weight(grid_path,dataset_combination)
+```
+
+```{r, fig.height=3}
+line_fun(grid_path,dataset_combination)
+```
+
+
+# WMA on subset of genes 
+
+For genes with high GC top three optimal WMA weights are XXX, XXX, XXX.
+```{r}
+path_summary <- '/Users/korshe/Documents/Data_Groningen/pbmc_pairwise_2022/subset_of_genes/'
+dataset_combination <- 'v2_1m_vs_v3_1m'
+parameter <- 'length'
+
+top_param_high <- function(path_summary, dataset_combination, parameter){
+  high_tab <- read.table(paste(path_summary,'1_Total_summary_',dataset_combination,'Sample.size.',parameter,'.donor_HIGHT.tsv',sep=''), sep='\t', header=T)
+  high_tab_t <- as.data.frame(t(high_tab))
+  colnames(high_tab_t) <- high_tab_t[1,]
+  high_tab_t<- high_tab_t[-1,]
+  
+  high_tab_t <- high_tab_t[order(high_tab_t$BH_SS_eQTLs, decreasing = T),]
+high_tab_t_3 <- high_tab_t[1:5,c('BH_SS_genes','BH_SS_eQTLs','cor_SS_all','cor_SS_sign')]
+high_tab_t_SS <- high_tab_t[rownames(high_tab_t)=="Sample.size.",c('BH_SS_genes','BH_SS_eQTLs','cor_SS_all','cor_SS_sign')]
+high_tab_t_SE <- high_tab_t[rownames(high_tab_t)=="Sample.size.",c('BH_SE_genes','BH_SE_eQTLs','cor_SE_all','cor_SE_sign')]
+rownames(high_tab_t_SE) <- "SE"
+colnames(high_tab_t_SE) <-c('BH_SS_genes','BH_SS_eQTLs','cor_SS_all','cor_SS_sign')
+high_tab_t_3 <- rbind(high_tab_t_3,high_tab_t_SS)
+high_tab_t_3 <- rbind(high_tab_t_3,high_tab_t_SE)
+knitr::kable(high_tab_t_3,  caption = paste(dataset_combination, 'WMA of subset of genes with high', parameter))
+}
+top_param_low <- function(path_summary, dataset_combination, parameter){
+  high_tab <- read.table(paste(path_summary,'1_Total_summary_',dataset_combination,'Sample.size.',parameter,'.donor_LOW.tsv',sep=''), sep='\t', header=T)
+  high_tab_t <- as.data.frame(t(high_tab))
+  colnames(high_tab_t) <- high_tab_t[1,]
+  high_tab_t<- high_tab_t[-1,]
+  
+  high_tab_t <- high_tab_t[order(high_tab_t$BH_SS_eQTLs, decreasing = T),]
+high_tab_t_3 <- high_tab_t[1:5,c('BH_SS_genes','BH_SS_eQTLs','cor_SS_all','cor_SS_sign')]
+high_tab_t_SS <- high_tab_t[rownames(high_tab_t)=="Sample.size.",c('BH_SS_genes','BH_SS_eQTLs','cor_SS_all','cor_SS_sign')]
+high_tab_t_SE <- high_tab_t[rownames(high_tab_t)=="Sample.size.",c('BH_SE_genes','BH_SE_eQTLs','cor_SE_all','cor_SE_sign')]
+rownames(high_tab_t_SE) <- "SE"
+colnames(high_tab_t_SE) <-c('BH_SS_genes','BH_SS_eQTLs','cor_SS_all','cor_SS_sign')
+high_tab_t_3 <- rbind(high_tab_t_3,high_tab_t_SS)
+high_tab_t_3 <- rbind(high_tab_t_3,high_tab_t_SE)
+knitr::kable(high_tab_t_3,  caption = paste(dataset_combination, 'WMA of subset of genes with low', parameter))
+}
+```
+
+## 1M v2 & v3
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='length')
+top_param_low(path_summary, dataset_combination, parameter='length')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='gc')
+top_param_low(path_summary, dataset_combination, parameter='gc')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='mean')
+top_param_low(path_summary, dataset_combination, parameter='mean')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='sd')
+top_param_low(path_summary, dataset_combination, parameter='sd')
+```
+
+## NG v2 & 1M v3
+```{r}
+dataset_combination ='ng_vs_v3_1m'
+top_param_high(path_summary, dataset_combination, parameter='length')
+top_param_low(path_summary, dataset_combination, parameter='length')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='gc')
+top_param_low(path_summary, dataset_combination, parameter='gc')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='mean')
+top_param_low(path_summary, dataset_combination, parameter='mean')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='sd')
+top_param_low(path_summary, dataset_combination, parameter='sd')
+```
+
+```{r}
+#parameters <- c('gc','length','mean','sd')
+```
+
+
+## NG v2 & STEMI v2
+```{r}
+dataset_combination ='ng_vs_stemi_v2'
+top_param_high(path_summary, dataset_combination, parameter='length')
+top_param_low(path_summary, dataset_combination, parameter='length')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='gc')
+top_param_low(path_summary, dataset_combination, parameter='gc')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='mean')
+top_param_low(path_summary, dataset_combination, parameter='mean')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='sd')
+top_param_low(path_summary, dataset_combination, parameter='sd')
+```
+
+
+## NG v2 & 1M v2
+```{r}
+dataset_combination ='ng_vs_v2_1m'
+top_param_high(path_summary, dataset_combination, parameter='length')
+top_param_low(path_summary, dataset_combination, parameter='length')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='gc')
+top_param_low(path_summary, dataset_combination, parameter='gc')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='mean')
+top_param_low(path_summary, dataset_combination, parameter='mean')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='sd')
+top_param_low(path_summary, dataset_combination, parameter='sd')
+```
+
+
+## STEMI v3 & 1M v3
+```{r}
+dataset_combination ='stemi_v3_vs_v3_1m'
+top_param_high(path_summary, dataset_combination, parameter='length')
+top_param_low(path_summary, dataset_combination, parameter='length')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='gc')
+top_param_low(path_summary, dataset_combination, parameter='gc')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='mean')
+top_param_low(path_summary, dataset_combination, parameter='mean')
+```
+
+```{r}
+top_param_high(path_summary, dataset_combination, parameter='sd')
+top_param_low(path_summary, dataset_combination, parameter='sd')
+```
+
+
+
+
+
+
+
+

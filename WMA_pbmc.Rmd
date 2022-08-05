@@ -429,16 +429,13 @@ show_most_optimal_weight(grid_path,dataset_combination)
 
 ```{r, fig.height=3}
 line_fun(grid_path,dataset_combination)
+
 ```
 
 ```{r, fig.height=4}
 dataset_combination = 'v3_1m_vs_stemi_v2'
 heatmap_fun(grid_path,dataset_combination)
 show_most_optimal_weight(grid_path,dataset_combination)
-```
-
-```{r, fig.height=3}
-#line_fun(grid_path,dataset_combination)
 ```
 
 ```{r, fig.height=4}
